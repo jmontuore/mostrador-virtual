@@ -140,8 +140,28 @@
     font-size:11.5px;
     color:var(--muted);
     font-weight:400;
+    flex-shrink:0;
   }
   .sucursal-item.active .count{color:var(--accent);}
+  .suc-left{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    min-width:0;
+    overflow:hidden;
+  }
+  .suc-left .suc-name{
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  }
+
+  .mostrador-meta{
+    font-size:12px;
+    color:var(--muted);
+    text-align:center;
+    margin-top:-2px;
+  }
 
   .sucursal-config{
     margin-top:16px;
@@ -155,7 +175,7 @@
     color:var(--muted);
     margin-bottom:4px;
   }
-  .field input[type=text], .field input[type=number], .field select{
+  .field input[type=text], .field input[type=number], .field input[type=time], .field select{
     width:100%;
     padding:7px 9px;
     border:1px solid var(--border);
@@ -164,6 +184,40 @@
     font-family:inherit;
   }
   .field input:focus, .field select:focus{outline:2px solid #c7dbfb; border-color:var(--accent);}
+  .field input:disabled, .field select:disabled{background:#f5f6f8; color:var(--muted); cursor:default;}
+
+  .horario-row{display:flex; gap:8px;}
+  .horario-row input{flex:1;}
+  .dias-semana{display:flex; gap:4px; margin-top:6px;}
+  .dia-toggle{
+    border:1px solid var(--border);
+    background:#fafbfc;
+    border-radius:6px;
+    width:30px;
+    height:26px;
+    font-size:11px;
+    color:var(--muted);
+    cursor:pointer;
+  }
+  .dia-toggle:hover{background:#f0f1f4;}
+  .dia-toggle.active{
+    background:var(--accent);
+    border-color:var(--accent);
+    color:#fff;
+    font-weight:700;
+  }
+
+  .estado-suc{
+    padding:1px 7px;
+    border-radius:999px;
+    font-size:10px;
+    font-weight:700;
+    text-transform:uppercase;
+    letter-spacing:.02em;
+    flex-shrink:0;
+  }
+  .estado-suc.abierta{background:#e3f7ec; color:var(--ok);}
+  .estado-suc.cerrada{background:#fdeceb; color:var(--danger);}
 
   /* Sectores */
   .sector-list{
@@ -544,6 +598,17 @@
   }
   .modal-box h3{margin:0 0 14px; font-size:16px;}
   .modal-box .field{margin-bottom:12px;}
+  .modal-contact-row{
+    display:flex;
+    gap:8px;
+    margin:0 0 16px;
+  }
+  .modal-contact-row .btn{
+    flex:1;
+    text-align:center;
+    text-decoration:none;
+    display:inline-block;
+  }
   .modal-actions{
     display:flex;
     gap:8px;
@@ -590,6 +655,18 @@
         <label>Nombre de la sucursal</label>
         <input type="text" id="sucursalNombre">
       </div>
+      <div class="field">
+        <label>Dirección</label>
+        <input type="text" id="sucursalDireccion" placeholder="Ej: Av. Argentina 123">
+      </div>
+      <div class="field">
+        <label>Horario de atención</label>
+        <div class="horario-row">
+          <input type="time" id="horarioApertura">
+          <input type="time" id="horarioCierre">
+        </div>
+        <div class="dias-semana" id="diasSemana"></div>
+      </div>
       <button class="btn danger small full" id="btnDeleteSucursal">Eliminar esta sucursal</button>
 
       <div class="field" style="margin-top:16px;">
@@ -604,6 +681,7 @@
   <div class="panel">
     <div class="mostrador-wrap">
       <div class="mostrador-title" id="mostradorTitle">Sucursal</div>
+      <div class="mostrador-meta" id="mostradorMeta"></div>
       <div class="sector-tabs" id="sectorTabs"></div>
       <div class="mostrador-sub" id="mostradorSub">0 / 0 puestos asignados</div>
       <div class="arc-stage" id="arcStage">
@@ -641,7 +719,11 @@
   <div class="modal-box">
     <h3 id="modalTitle">Editar vendedor</h3>
     <div class="avatar-preview" id="modalAvatarPreview">👤</div>
-    <div class="field">
+    <div class="modal-contact-row" id="modalContactRow" style="display:none;">
+      <a class="btn primary small" id="btnWhatsapp" href="#" target="_blank" rel="noopener">📱 WhatsApp</a>
+      <a class="btn small" id="btnMail" href="#" target="_blank" rel="noopener">✉️ Mail</a>
+    </div>
+    <div class="field" id="fotoField">
       <label>Foto</label>
       <input type="file" id="modalImagenInput" accept="image/*">
       <button class="btn small full" id="btnPickImagen" style="margin-top:6px;">Elegir imagen</button>
@@ -656,7 +738,7 @@
     </div>
     <div class="field">
       <label>Teléfono</label>
-      <input type="text" id="modalTelefono" placeholder="Ej: 299 000 0000">
+      <input type="text" id="modalTelefono" placeholder="Ej: 5492990000000 (con código de país para WhatsApp)">
     </div>
     <div class="field">
       <label>Mail</label>
@@ -750,6 +832,7 @@
 
   var DEFAULT_SECTOR_NAMES = ['Mostrador', 'Venta Empresas', 'Ventas Especiales', 'Cuentas Corrientes'];
   var DEFAULT_SECTOR_LUGARES = { 'Mostrador': 8, 'Venta Empresas': 2, 'Ventas Especiales': 2, 'Cuentas Corrientes': 2 };
+  var DIA_LABELS = ['Do', 'Lu', 'Ma', 'Mi', 'Ju', 'Vi', 'Sa'];
 
   var ESTADO_COLORS = {
     'Operativo': '#1a9c5c',
@@ -767,12 +850,21 @@
   function defaultState(){
     var sucursales = [];
     for(var i=1;i<=8;i++){
-      sucursales.push({ id:i, nombre:'Sucursal ' + i, sectores: makeDefaultSectores() });
+      sucursales.push({ id:i, nombre:'Sucursal ' + i, direccion:'', horario:null, sectores: makeDefaultSectores() });
     }
     return { sucursales: sucursales, vendedores: [] };
   }
 
   function migrateSucursal(suc){
+    if(typeof suc.direccion !== 'string') suc.direccion = '';
+    if(suc.horario && typeof suc.horario === 'object'){
+      if(typeof suc.horario.open !== 'string') suc.horario.open = '';
+      if(typeof suc.horario.close !== 'string') suc.horario.close = '';
+      if(!Array.isArray(suc.horario.dias)) suc.horario.dias = [1,2,3,4,5];
+    } else {
+      suc.horario = null;
+    }
+
     if(suc.sectores && suc.sectores.length){
       suc.sectores.forEach(function(sec){
         if(!sec.asignaciones) sec.asignaciones = {};
@@ -789,6 +881,39 @@
     delete suc.asignaciones;
     suc.sectores = sectores;
     return suc;
+  }
+
+  function parseHora(str){
+    if(!str) return null;
+    var m = /^(\d{1,2}):(\d{2})$/.exec(String(str).trim());
+    if(!m) return null;
+    return parseInt(m[1],10)*60 + parseInt(m[2],10);
+  }
+
+  function sucursalEstado(suc){
+    var h = suc.horario;
+    if(!h || !h.open || !h.close) return null;
+    var openMin = parseHora(h.open);
+    var closeMin = parseHora(h.close);
+    if(openMin === null || closeMin === null) return null;
+    var now = new Date();
+    var dias = (h.dias && h.dias.length) ? h.dias : [0,1,2,3,4,5,6];
+    var mins = now.getHours()*60 + now.getMinutes();
+    if(closeMin > openMin){
+      if(dias.indexOf(now.getDay()) === -1) return 'cerrada';
+      return (mins >= openMin && mins < closeMin) ? 'abierta' : 'cerrada';
+    }
+    // horario que cruza la medianoche (ej: 22:00 a 06:00)
+    var isAfterOpen = mins >= openMin && dias.indexOf(now.getDay()) !== -1;
+    var prevDay = (now.getDay() + 6) % 7;
+    var isBeforeCloseFromPrevDay = mins < closeMin && dias.indexOf(prevDay) !== -1;
+    return (isAfterOpen || isBeforeCloseFromPrevDay) ? 'abierta' : 'cerrada';
+  }
+
+  function estadoBadgeHtml(suc){
+    var estado = sucursalEstado(suc);
+    if(!estado) return '';
+    return '<span class="estado-suc ' + estado + '">' + (estado === 'abierta' ? 'Abierta' : 'Cerrada') + '</span>';
   }
 
   function migrateVendedor(v){
@@ -917,8 +1042,12 @@
     state.sucursales.forEach(function(suc){
       var div = document.createElement('div');
       div.className = 'sucursal-item' + (suc.id === selectedSucursalId ? ' active' : '');
+      div.setAttribute('data-suc-id', suc.id);
       var totals = sucursalTotals(suc);
-      div.innerHTML = '<span>' + escapeHtml(suc.nombre) + '</span><span class="count">' + totals.occupied + '/' + totals.total + '</span>';
+      div.innerHTML =
+        '<span class="suc-left"><span class="suc-name">' + escapeHtml(suc.nombre) + '</span>' +
+        '<span class="estado-suc-slot">' + estadoBadgeHtml(suc) + '</span></span>' +
+        '<span class="count">' + totals.occupied + '/' + totals.total + '</span>';
       div.addEventListener('click', function(){
         selectedSucursalId = suc.id;
         renderAll();
@@ -932,7 +1061,57 @@
     var suc = getSucursal(selectedSucursalId);
     document.getElementById('sucursalNombre').value = suc.nombre;
     renderSectorConfig(suc);
+    renderHorarioConfig(suc);
     markDirty();
+  }
+
+  function refreshSucursalBadges(){
+    var list = document.getElementById('sucursalList');
+    if(!list) return;
+    Array.prototype.forEach.call(list.querySelectorAll('.sucursal-item'), function(div){
+      var id = parseInt(div.getAttribute('data-suc-id'), 10);
+      var suc = getSucursal(id);
+      if(!suc) return;
+      var slot = div.querySelector('.estado-suc-slot');
+      if(slot) slot.innerHTML = estadoBadgeHtml(suc);
+    });
+  }
+
+  function renderHorarioConfig(suc){
+    document.getElementById('sucursalDireccion').value = suc.direccion || '';
+    document.getElementById('horarioApertura').value = (suc.horario && suc.horario.open) || '';
+    document.getElementById('horarioCierre').value = (suc.horario && suc.horario.close) || '';
+
+    var wrap = document.getElementById('diasSemana');
+    wrap.innerHTML = '';
+    var dias = (suc.horario && suc.horario.dias) || [1,2,3,4,5];
+    DIA_LABELS.forEach(function(label, dayNum){
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'dia-toggle' + (dias.indexOf(dayNum) !== -1 ? ' active' : '');
+      btn.textContent = label;
+      btn.addEventListener('click', function(){
+        if(!suc.horario) suc.horario = { open:'', close:'', dias:[] };
+        var idx = suc.horario.dias.indexOf(dayNum);
+        if(idx === -1) suc.horario.dias.push(dayNum); else suc.horario.dias.splice(idx,1);
+        renderSucursalList();
+      });
+      wrap.appendChild(btn);
+    });
+  }
+
+  function renderMostradorMeta(suc){
+    var direccionHtml = suc.direccion ? escapeHtml(suc.direccion) : '';
+    var horarioHtml = '';
+    if(suc.horario && suc.horario.open && suc.horario.close){
+      var dias = (suc.horario.dias || []).slice().sort();
+      var diasTxt = dias.length === 7 ? 'Todos los días' : dias.map(function(d){ return DIA_LABELS[d]; }).join(' ');
+      horarioHtml = escapeHtml((diasTxt ? diasTxt + ' ' : '') + suc.horario.open + '–' + suc.horario.close);
+    }
+    var estadoHtml = estadoBadgeHtml(suc);
+    var metaBits = [direccionHtml, horarioHtml].filter(Boolean);
+    var el = document.getElementById('mostradorMeta');
+    el.innerHTML = metaBits.length ? (metaBits.join(' · ') + ' ' + estadoHtml) : '';
   }
 
   function renderSectorConfig(suc){
@@ -994,6 +1173,7 @@
   function renderMostrador(){
     var suc = getSucursal(selectedSucursalId);
     document.getElementById('mostradorTitle').textContent = suc.nombre;
+    renderMostradorMeta(suc);
 
     var sector = getSelectedSector(suc);
 
@@ -1093,11 +1273,9 @@
           place.addEventListener('mouseleave', function(){
             hideVendorCard();
           });
-          if(editMode){
-            place.addEventListener('click', function(){
-              openVendorModal(vendor.id);
-            });
-          }
+          place.addEventListener('click', function(){
+            openVendorModal(vendor.id);
+          });
         } else if(editMode){
           place.addEventListener('click', function(){
             openPickerForPlace(suc.id, sector.id, index);
@@ -1201,13 +1379,38 @@
     if(!v) return;
     editingVendorId = vendorId;
     pendingImagenDataUrl = v.imagen || null;
-    document.getElementById('modalTitle').textContent = 'Editar vendedor';
+    document.getElementById('modalTitle').textContent = editMode ? 'Editar vendedor' : 'Ficha de vendedor';
     document.getElementById('modalNombre').value = v.nombre;
     document.getElementById('modalCargo').value = v.cargo || '';
     document.getElementById('modalTelefono').value = v.telefono || '';
     document.getElementById('modalMail').value = v.mail || '';
     document.getElementById('modalEstado').value = v.estado || 'Operativo';
     updateAvatarPreview(v);
+
+    ['modalNombre','modalCargo','modalTelefono','modalMail','modalEstado'].forEach(function(id){
+      document.getElementById(id).disabled = !editMode;
+    });
+    document.getElementById('fotoField').style.display = editMode ? '' : 'none';
+    document.getElementById('btnSaveModal').style.display = editMode ? '' : 'none';
+    document.getElementById('btnCancelModal').textContent = editMode ? 'Cancelar' : 'Cerrar';
+
+    var waBtn = document.getElementById('btnWhatsapp');
+    var mailBtn = document.getElementById('btnMail');
+    var digits = (v.telefono || '').replace(/\D/g, '');
+    if(digits){
+      waBtn.href = 'https://wa.me/' + digits;
+      waBtn.style.display = '';
+    } else {
+      waBtn.style.display = 'none';
+    }
+    if(v.mail){
+      mailBtn.href = 'mailto:' + v.mail;
+      mailBtn.style.display = '';
+    } else {
+      mailBtn.style.display = 'none';
+    }
+    document.getElementById('modalContactRow').style.display = (digits || v.mail) ? 'flex' : 'none';
+
     hideVendorCard();
     document.getElementById('modalOverlay').classList.add('show');
   }
@@ -1351,6 +1554,7 @@
 
         chip.addEventListener('mouseenter', function(){ showVendorCard(v, chip); });
         chip.addEventListener('mouseleave', function(){ hideVendorCard(); });
+        chip.addEventListener('click', function(){ openVendorModal(v.id); });
 
         pool.appendChild(chip);
       });
@@ -1377,8 +1581,8 @@
     document.getElementById('btnAddSucursal').style.display = editMode ? '' : 'none';
     document.getElementById('sucursalConfig').style.display = editMode ? '' : 'none';
     document.getElementById('hintText').textContent = editMode
-      ? 'Arrastrá un vendedor y soltalo sobre un puesto. Clic sobre un puesto ocupado para editar sus datos.'
-      : 'Modo solo lectura. Activá "Modo edición" (arriba a la derecha) para hacer cambios.';
+      ? 'Arrastrá un vendedor y soltalo sobre un puesto. Clic sobre un puesto ocupado para ver o editar su ficha.'
+      : 'Clic sobre un puesto ocupado para ver la ficha y contactar por WhatsApp o mail. Activá "Modo edición" (arriba a la derecha) para hacer cambios.';
   }
 
   // ---------- Vendor import helpers ----------
@@ -1457,7 +1661,7 @@
   function addSucursal(){
     var maxId = state.sucursales.reduce(function(m,s){ return Math.max(m,s.id); }, 0);
     var newId = maxId + 1;
-    var newSuc = { id:newId, nombre:'Sucursal ' + newId, sectores: makeDefaultSectores() };
+    var newSuc = { id:newId, nombre:'Sucursal ' + newId, direccion:'', horario:null, sectores: makeDefaultSectores() };
     state.sucursales.push(newSuc);
     selectedSucursalId = newId;
     renderAll();
@@ -1491,6 +1695,29 @@
     suc.nombre = e.target.value;
     renderSucursalList();
     document.getElementById('mostradorTitle').textContent = suc.nombre;
+  });
+
+  document.getElementById('sucursalDireccion').addEventListener('input', function(e){
+    var suc = getSucursal(selectedSucursalId);
+    suc.direccion = e.target.value;
+    renderMostrador();
+    markDirty();
+  });
+
+  document.getElementById('horarioApertura').addEventListener('input', function(e){
+    var suc = getSucursal(selectedSucursalId);
+    if(!suc.horario) suc.horario = { open:'', close:'', dias:[1,2,3,4,5] };
+    suc.horario.open = e.target.value;
+    renderSucursalList();
+    renderMostrador();
+  });
+
+  document.getElementById('horarioCierre').addEventListener('input', function(e){
+    var suc = getSucursal(selectedSucursalId);
+    if(!suc.horario) suc.horario = { open:'', close:'', dias:[1,2,3,4,5] };
+    suc.horario.close = e.target.value;
+    renderSucursalList();
+    renderMostrador();
   });
 
   document.getElementById('btnAddSucursal').addEventListener('click', function(){
@@ -1645,6 +1872,13 @@
       }
     });
   });
+
+  setInterval(function(){
+    if(!state) return;
+    refreshSucursalBadges();
+    var suc = getSucursal(selectedSucursalId);
+    if(suc) renderMostradorMeta(suc);
+  }, 30000);
 
   // ---------- Init ----------
   loadState().then(function(){
