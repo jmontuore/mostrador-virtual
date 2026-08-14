@@ -570,6 +570,7 @@
     <div class="sub">Atención comercial · sucursales, sectores y ficha de cada vendedor</div>
   </div>
   <div class="header-actions">
+    <button class="btn" id="btnEditMode">🔒 Modo edición</button>
     <button class="btn" id="btnImport">Importar JSON</button>
     <button class="btn primary" id="btnExport">Exportar JSON</button>
     <input type="file" id="fileInput" accept="application/json">
@@ -584,7 +585,7 @@
     <div class="sucursal-list" id="sucursalList"></div>
     <button class="btn small full" id="btnAddSucursal" style="margin-top:8px;">+ Agregar sucursal</button>
 
-    <div class="sucursal-config">
+    <div class="sucursal-config" id="sucursalConfig">
       <div class="field">
         <label>Nombre de la sucursal</label>
         <input type="text" id="sucursalNombre">
@@ -608,14 +609,14 @@
       <div class="arc-stage" id="arcStage">
         <div class="counter-shape"></div>
       </div>
-      <div class="hint">Arrastrá un vendedor y soltalo sobre un puesto. Pasá el mouse sobre un puesto ocupado para ver su ficha. Clic sobre un puesto ocupado para editar sus datos.</div>
+      <div class="hint" id="hintText">Pasá el mouse sobre un puesto ocupado para ver su ficha.</div>
     </div>
   </div>
 
   <!-- Vendedores -->
   <div class="panel">
     <h2>Vendedores</h2>
-    <div class="load-box">
+    <div class="load-box" id="loadBox">
       <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px;">Pegar lista (un nombre por línea)</label>
       <textarea id="vendedoresInput" placeholder="Juan Pérez&#10;María Gómez&#10;Carlos Ruiz"></textarea>
       <button class="btn primary full" id="btnCargarVendedores">Cargar vendedores</button>
@@ -691,19 +692,60 @@
   var editingVendorId = null;
   var pendingImagenDataUrl = null;
 
-  // Clave para habilitar carga/edición/eliminación de vendedores.
-  // Se pide siempre, en cada acción, sin quedar "desbloqueada".
-  // Cambiala por la que quieras usar en tu equipo.
-  var EDIT_PASSWORD = 'mostrador2026';
+  // El estado se guarda en el servidor (Vercel + KV) y lo ve cualquiera que
+  // abra la página. Solo quien active el "Modo edición" con la clave correcta
+  // (verificada del lado del servidor) puede modificarlo y guardar cambios.
+  var editMode = false;
+  var editModePassword = null;
+  var syncTimer = null;
 
-  function requireEditPermission(){
-    var pass = prompt('Ingresá la clave para cargar o modificar vendedores:');
-    if(pass === null) return false;
-    if(pass === EDIT_PASSWORD){
-      return true;
-    }
-    showToast('Clave incorrecta.');
-    return false;
+  function enterEditMode(pass){
+    return fetch('/api/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: pass })
+    }).then(function(res){ return res.json(); }).then(function(json){
+      if(json.ok){
+        editMode = true;
+        editModePassword = pass;
+      }
+      return json.ok;
+    }).catch(function(){
+      showToast('No se pudo verificar la clave. Revisá tu conexión.');
+      return false;
+    });
+  }
+
+  function exitEditMode(){
+    editMode = false;
+    editModePassword = null;
+  }
+
+  function markDirty(){
+    if(!editMode) return;
+    if(syncTimer) clearTimeout(syncTimer);
+    syncTimer = setTimeout(syncState, 600);
+  }
+
+  function syncState(){
+    if(!editMode || !editModePassword) return;
+    fetch('/api/state', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        password: editModePassword,
+        payload: { state: state, idCounter: idCounter, selectedSucursalId: selectedSucursalId }
+      })
+    }).then(function(res){
+      if(res.status === 401){
+        showToast('Tu sesión de edición ya no es válida.');
+        exitEditMode();
+        updateEditModeUI();
+        renderAll();
+      }
+    }).catch(function(){
+      showToast('No se pudo guardar en el servidor. Revisá tu conexión.');
+    });
   }
 
   var DEFAULT_SECTOR_NAMES = ['Mostrador', 'Venta Empresas', 'Ventas Especiales', 'Cuentas Corrientes'];
@@ -759,7 +801,19 @@
   }
 
   function loadState(){
-    state = defaultState();
+    return fetch('/api/state').then(function(res){ return res.json(); }).then(function(json){
+      if(json.ok && json.data && json.data.state){
+        state = json.data.state;
+        state.sucursales.forEach(migrateSucursal);
+        state.vendedores.forEach(migrateVendedor);
+        idCounter = json.data.idCounter || (Math.max.apply(null, state.vendedores.map(function(v){return v.id;}).concat([0])) + 1);
+        selectedSucursalId = json.data.selectedSucursalId || state.sucursales[0].id;
+      } else {
+        state = defaultState();
+      }
+    }).catch(function(){
+      state = defaultState();
+    });
   }
 
   // ---------- Utilities ----------
@@ -878,6 +932,7 @@
     var suc = getSucursal(selectedSucursalId);
     document.getElementById('sucursalNombre').value = suc.nombre;
     renderSectorConfig(suc);
+    markDirty();
   }
 
   function renderSectorConfig(suc){
@@ -1019,16 +1074,18 @@
         place.appendChild(nameEl);
 
         if(vendor){
-          var clearBtn = document.createElement('button');
-          clearBtn.className = 'clear-btn';
-          clearBtn.textContent = 'Quitar';
-          clearBtn.addEventListener('click', function(e){
-            e.stopPropagation();
-            delete sector.asignaciones[index];
-            hideVendorCard();
-            renderAll();
-          });
-          place.appendChild(clearBtn);
+          if(editMode){
+            var clearBtn = document.createElement('button');
+            clearBtn.className = 'clear-btn';
+            clearBtn.textContent = 'Quitar';
+            clearBtn.addEventListener('click', function(e){
+              e.stopPropagation();
+              delete sector.asignaciones[index];
+              hideVendorCard();
+              renderAll();
+            });
+            place.appendChild(clearBtn);
+          }
 
           place.addEventListener('mouseenter', function(e){
             showVendorCard(vendor, place);
@@ -1036,34 +1093,39 @@
           place.addEventListener('mouseleave', function(){
             hideVendorCard();
           });
-          place.addEventListener('click', function(){
-            openVendorModal(vendor.id);
-          });
-        } else {
+          if(editMode){
+            place.addEventListener('click', function(){
+              openVendorModal(vendor.id);
+            });
+          }
+        } else if(editMode){
           place.addEventListener('click', function(){
             openPickerForPlace(suc.id, sector.id, index);
           });
         }
 
-        place.addEventListener('dragover', function(e){
-          e.preventDefault();
-          place.classList.add('dragover');
-        });
-        place.addEventListener('dragleave', function(){
-          place.classList.remove('dragover');
-        });
-        place.addEventListener('drop', function(e){
-          e.preventDefault();
-          place.classList.remove('dragover');
-          if(draggedVendorId !== null){
-            assignVendorToPlace(draggedVendorId, suc.id, sector.id, index);
-            draggedVendorId = null;
-          }
-        });
+        if(editMode){
+          place.addEventListener('dragover', function(e){
+            e.preventDefault();
+            place.classList.add('dragover');
+          });
+          place.addEventListener('dragleave', function(){
+            place.classList.remove('dragover');
+          });
+          place.addEventListener('drop', function(e){
+            e.preventDefault();
+            place.classList.remove('dragover');
+            if(draggedVendorId !== null){
+              assignVendorToPlace(draggedVendorId, suc.id, sector.id, index);
+              draggedVendorId = null;
+            }
+          });
+        }
 
         stage.appendChild(place);
       })(i, posX, posY);
     }
+    markDirty();
   }
 
   function assignVendorToPlace(vendorId, sucId, sectorId, placeIndex){
@@ -1188,7 +1250,7 @@
   });
 
   document.getElementById('btnSaveModal').addEventListener('click', function(){
-    if(!requireEditPermission()) return;
+    if(!editMode) return;
     var v = getVendedor(editingVendorId);
     if(!v) { closeVendorModal(); return; }
     var newName = document.getElementById('modalNombre').value.trim();
@@ -1219,7 +1281,8 @@
       state.vendedores.forEach(function(v){
         var chip = document.createElement('div');
         chip.className = 'chip';
-        chip.setAttribute('draggable','true');
+        chip.setAttribute('draggable', editMode ? 'true' : 'false');
+        if(!editMode) chip.style.cursor = 'default';
 
         var isAssigned = !!assigned[v.id];
         var locText = '';
@@ -1239,54 +1302,55 @@
         info.innerHTML = '<div class="nm">' + escapeHtml(v.nombre) + '</div>' +
           '<div class="cg">' + escapeHtml(v.cargo || 'Sin cargo') + (locText ? ' · ' + escapeHtml(locText) : '') + '</div>';
 
-        var actions = document.createElement('div');
-        actions.className = 'actions';
-
-        var editBtn = document.createElement('button');
-        editBtn.className = 'edit';
-        editBtn.textContent = '✎';
-        editBtn.title = 'Editar ficha';
-        editBtn.addEventListener('click', function(e){
-          e.stopPropagation();
-          openVendorModal(v.id);
-        });
-
-        var del = document.createElement('button');
-        del.className = 'del';
-        del.textContent = '✕';
-        del.title = 'Eliminar vendedor';
-        del.addEventListener('click', function(e){
-          e.stopPropagation();
-          if(!requireEditPermission()) return;
-          state.vendedores = state.vendedores.filter(function(x){ return x.id !== v.id; });
-          state.sucursales.forEach(function(s){
-            s.sectores.forEach(function(sec){
-              Object.keys(sec.asignaciones).forEach(function(k){
-                if(sec.asignaciones[k] === v.id) delete sec.asignaciones[k];
-              });
-            });
-          });
-          renderAll();
-        });
-
-        actions.appendChild(editBtn);
-        actions.appendChild(del);
-
         chip.appendChild(avatar);
         chip.appendChild(info);
-        chip.appendChild(actions);
+
+        if(editMode){
+          var actions = document.createElement('div');
+          actions.className = 'actions';
+
+          var editBtn = document.createElement('button');
+          editBtn.className = 'edit';
+          editBtn.textContent = '✎';
+          editBtn.title = 'Editar ficha';
+          editBtn.addEventListener('click', function(e){
+            e.stopPropagation();
+            openVendorModal(v.id);
+          });
+
+          var del = document.createElement('button');
+          del.className = 'del';
+          del.textContent = '✕';
+          del.title = 'Eliminar vendedor';
+          del.addEventListener('click', function(e){
+            e.stopPropagation();
+            state.vendedores = state.vendedores.filter(function(x){ return x.id !== v.id; });
+            state.sucursales.forEach(function(s){
+              s.sectores.forEach(function(sec){
+                Object.keys(sec.asignaciones).forEach(function(k){
+                  if(sec.asignaciones[k] === v.id) delete sec.asignaciones[k];
+                });
+              });
+            });
+            renderAll();
+          });
+
+          actions.appendChild(editBtn);
+          actions.appendChild(del);
+          chip.appendChild(actions);
+
+          chip.addEventListener('dragstart', function(){
+            draggedVendorId = v.id;
+            chip.style.opacity = '0.5';
+            hideVendorCard();
+          });
+          chip.addEventListener('dragend', function(){
+            chip.style.opacity = '1';
+          });
+        }
 
         chip.addEventListener('mouseenter', function(){ showVendorCard(v, chip); });
         chip.addEventListener('mouseleave', function(){ hideVendorCard(); });
-
-        chip.addEventListener('dragstart', function(){
-          draggedVendorId = v.id;
-          chip.style.opacity = '0.5';
-          hideVendorCard();
-        });
-        chip.addEventListener('dragend', function(){
-          chip.style.opacity = '1';
-        });
 
         pool.appendChild(chip);
       });
@@ -1295,12 +1359,26 @@
     var assignedCount = Object.keys(assigned).length;
     document.getElementById('statUnassigned').textContent = state.vendedores.length - assignedCount;
     document.getElementById('statTotal').textContent = state.vendedores.length;
+    markDirty();
   }
 
   function renderAll(){
     renderSucursalList();
     renderMostrador();
     renderPool();
+  }
+
+  function updateEditModeUI(){
+    var btn = document.getElementById('btnEditMode');
+    btn.textContent = editMode ? '🔓 Salir del modo edición' : '🔒 Modo edición';
+    btn.className = editMode ? 'btn danger' : 'btn';
+    document.getElementById('btnImport').style.display = editMode ? '' : 'none';
+    document.getElementById('loadBox').style.display = editMode ? '' : 'none';
+    document.getElementById('btnAddSucursal').style.display = editMode ? '' : 'none';
+    document.getElementById('sucursalConfig').style.display = editMode ? '' : 'none';
+    document.getElementById('hintText').textContent = editMode
+      ? 'Arrastrá un vendedor y soltalo sobre un puesto. Clic sobre un puesto ocupado para editar sus datos.'
+      : 'Modo solo lectura. Activá "Modo edición" (arriba a la derecha) para hacer cambios.';
   }
 
   // ---------- Vendor import helpers ----------
@@ -1429,7 +1507,7 @@
   });
 
   document.getElementById('btnCargarVendedores').addEventListener('click', function(){
-    if(!requireEditPermission()) return;
+    if(!editMode) return;
     var raw = document.getElementById('vendedoresInput').value;
     var lines = raw.split('\n');
     if(lines.join('').trim().length === 0){
@@ -1443,12 +1521,12 @@
   });
 
   document.getElementById('btnCargarCSV').addEventListener('click', function(){
-    if(!requireEditPermission()) return;
+    if(!editMode) return;
     document.getElementById('csvInput').click();
   });
 
   document.getElementById('csvInput').addEventListener('change', function(e){
-    if(!requireEditPermission()){ e.target.value = ''; return; }
+    if(!editMode){ e.target.value = ''; return; }
     var file = e.target.files[0];
     if(!file) return;
     var isExcel = /\.xlsx?$/i.test(file.name);
@@ -1511,12 +1589,12 @@
   });
 
   document.getElementById('btnImport').addEventListener('click', function(){
-    if(!requireEditPermission()) return;
+    if(!editMode) return;
     document.getElementById('fileInput').click();
   });
 
   document.getElementById('fileInput').addEventListener('change', function(e){
-    if(!requireEditPermission()){ e.target.value = ''; return; }
+    if(!editMode){ e.target.value = ''; return; }
     var file = e.target.files[0];
     if(!file) return;
     var reader = new FileReader();
@@ -1547,9 +1625,32 @@
     renderMostrador();
   });
 
+  document.getElementById('btnEditMode').addEventListener('click', function(){
+    if(editMode){
+      exitEditMode();
+      updateEditModeUI();
+      renderAll();
+      showToast('Saliste del modo edición.');
+      return;
+    }
+    var pass = prompt('Ingresá la clave para activar el modo edición:');
+    if(pass === null) return;
+    enterEditMode(pass).then(function(ok){
+      if(ok){
+        updateEditModeUI();
+        renderAll();
+        showToast('Modo edición activado.');
+      } else {
+        showToast('Clave incorrecta.');
+      }
+    });
+  });
+
   // ---------- Init ----------
-  loadState();
-  renderAll();
+  loadState().then(function(){
+    updateEditModeUI();
+    renderAll();
+  });
 })();
 </script>
 

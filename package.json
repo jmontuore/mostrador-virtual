@@ -1,0 +1,8 @@
+{
+  "name": "mostrador-virtual",
+  "private": true,
+  "version": "1.0.0",
+  "dependencies": {
+    "@vercel/kv": "latest"
+  }
+}
