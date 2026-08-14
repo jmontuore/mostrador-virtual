@@ -691,6 +691,24 @@
   var editingVendorId = null;
   var pendingImagenDataUrl = null;
 
+  // Clave para habilitar carga/edición/eliminación de vendedores.
+  // Cambiala por la que quieras usar en tu equipo.
+  var EDIT_PASSWORD = 'mostrador2026';
+  var editUnlocked = (sessionStorage.getItem('mv_edit_unlocked') === '1');
+
+  function requireEditPermission(){
+    if(editUnlocked) return true;
+    var pass = prompt('Ingresá la clave para cargar o modificar vendedores:');
+    if(pass === null) return false;
+    if(pass === EDIT_PASSWORD){
+      editUnlocked = true;
+      sessionStorage.setItem('mv_edit_unlocked', '1');
+      return true;
+    }
+    showToast('Clave incorrecta.');
+    return false;
+  }
+
   var DEFAULT_SECTOR_NAMES = ['Mostrador', 'Venta Empresas', 'Ventas Especiales', 'Cuentas Corrientes'];
   var DEFAULT_SECTOR_LUGARES = { 'Mostrador': 8, 'Venta Empresas': 2, 'Ventas Especiales': 2, 'Cuentas Corrientes': 2 };
 
@@ -1173,6 +1191,7 @@
   });
 
   document.getElementById('btnSaveModal').addEventListener('click', function(){
+    if(!requireEditPermission()) return;
     var v = getVendedor(editingVendorId);
     if(!v) { closeVendorModal(); return; }
     var newName = document.getElementById('modalNombre').value.trim();
@@ -1241,6 +1260,7 @@
         del.title = 'Eliminar vendedor';
         del.addEventListener('click', function(e){
           e.stopPropagation();
+          if(!requireEditPermission()) return;
           state.vendedores = state.vendedores.filter(function(x){ return x.id !== v.id; });
           state.sucursales.forEach(function(s){
             s.sectores.forEach(function(sec){
@@ -1412,6 +1432,7 @@
   });
 
   document.getElementById('btnCargarVendedores').addEventListener('click', function(){
+    if(!requireEditPermission()) return;
     var raw = document.getElementById('vendedoresInput').value;
     var lines = raw.split('\n');
     if(lines.join('').trim().length === 0){
@@ -1425,10 +1446,12 @@
   });
 
   document.getElementById('btnCargarCSV').addEventListener('click', function(){
+    if(!requireEditPermission()) return;
     document.getElementById('csvInput').click();
   });
 
   document.getElementById('csvInput').addEventListener('change', function(e){
+    if(!requireEditPermission()){ e.target.value = ''; return; }
     var file = e.target.files[0];
     if(!file) return;
     var isExcel = /\.xlsx?$/i.test(file.name);
@@ -1491,10 +1514,12 @@
   });
 
   document.getElementById('btnImport').addEventListener('click', function(){
+    if(!requireEditPermission()) return;
     document.getElementById('fileInput').click();
   });
 
   document.getElementById('fileInput').addEventListener('change', function(e){
+    if(!requireEditPermission()){ e.target.value = ''; return; }
     var file = e.target.files[0];
     if(!file) return;
     var reader = new FileReader();
