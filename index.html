@@ -535,7 +535,6 @@
     padding:14px;
     z-index:70;
     display:none;
-    pointer-events:none;
   }
   .vendor-card.show{display:block;}
   .vendor-card .vc-head{
@@ -573,6 +572,18 @@
     padding:3px 9px;
     border-radius:999px;
     margin-top:8px;
+  }
+  .vc-actions{
+    display:flex;
+    gap:6px;
+    margin-top:10px;
+  }
+  .vc-actions .btn{
+    flex:1;
+    text-align:center;
+    text-decoration:none;
+    padding:6px 8px;
+    font-size:12px;
   }
 
   /* Vendor edit modal */
@@ -1271,7 +1282,7 @@
             showVendorCard(vendor, place);
           });
           place.addEventListener('mouseleave', function(){
-            hideVendorCard();
+            scheduleHideVendorCard();
           });
           place.addEventListener('click', function(){
             openVendorModal(vendor.id);
@@ -1339,9 +1350,23 @@
   }
 
   // ---------- Hover vendor card ----------
+  function whatsappHref(vendor){
+    var digits = (vendor.telefono || '').replace(/\D/g, '');
+    return digits ? 'https://wa.me/' + digits : null;
+  }
+
   function showVendorCard(vendor, anchorEl){
+    cancelHideVendorCard();
     var card = document.getElementById('vendorCard');
     var color = ESTADO_COLORS[vendor.estado] || ESTADO_COLORS['Operativo'];
+    var waHref = whatsappHref(vendor);
+    var contactHtml = '';
+    if(waHref || vendor.mail){
+      contactHtml = '<div class="vc-actions">' +
+        (waHref ? '<a class="btn primary small" href="' + waHref + '" target="_blank" rel="noopener">📱 WhatsApp</a>' : '') +
+        (vendor.mail ? '<a class="btn small" href="mailto:' + escapeHtml(vendor.mail) + '" target="_blank" rel="noopener">✉️ Mail</a>' : '') +
+        '</div>';
+    }
     card.innerHTML =
       '<div class="vc-head">' +
         '<div class="vc-avatar">' + avatarHtml(vendor) + '</div>' +
@@ -1350,7 +1375,8 @@
       '</div>' +
       '<div class="vc-row"><span class="lbl">Tel:</span><span>' + escapeHtml(vendor.telefono || '—') + '</span></div>' +
       '<div class="vc-row"><span class="lbl">Mail:</span><span>' + escapeHtml(vendor.mail || '—') + '</span></div>' +
-      '<div class="vc-badge" style="background:' + color + '22; color:' + color + ';">' + escapeHtml(vendor.estado || 'Operativo') + '</div>';
+      '<div class="vc-badge" style="background:' + color + '22; color:' + color + ';">' + escapeHtml(vendor.estado || 'Operativo') + '</div>' +
+      contactHtml;
 
     var rect = anchorEl.getBoundingClientRect();
     var cardW = 230;
@@ -1372,6 +1398,16 @@
     card.classList.remove('show');
     card.style.transform = '';
   }
+  var hideCardTimer = null;
+  function scheduleHideVendorCard(){
+    if(hideCardTimer) clearTimeout(hideCardTimer);
+    hideCardTimer = setTimeout(hideVendorCard, 200);
+  }
+  function cancelHideVendorCard(){
+    if(hideCardTimer){ clearTimeout(hideCardTimer); hideCardTimer = null; }
+  }
+  document.getElementById('vendorCard').addEventListener('mouseenter', cancelHideVendorCard);
+  document.getElementById('vendorCard').addEventListener('mouseleave', scheduleHideVendorCard);
 
   // ---------- Vendor edit modal ----------
   function openVendorModal(vendorId){
@@ -1396,9 +1432,9 @@
 
     var waBtn = document.getElementById('btnWhatsapp');
     var mailBtn = document.getElementById('btnMail');
-    var digits = (v.telefono || '').replace(/\D/g, '');
-    if(digits){
-      waBtn.href = 'https://wa.me/' + digits;
+    var waHref = whatsappHref(v);
+    if(waHref){
+      waBtn.href = waHref;
       waBtn.style.display = '';
     } else {
       waBtn.style.display = 'none';
@@ -1409,7 +1445,7 @@
     } else {
       mailBtn.style.display = 'none';
     }
-    document.getElementById('modalContactRow').style.display = (digits || v.mail) ? 'flex' : 'none';
+    document.getElementById('modalContactRow').style.display = (waHref || v.mail) ? 'flex' : 'none';
 
     hideVendorCard();
     document.getElementById('modalOverlay').classList.add('show');
@@ -1553,7 +1589,7 @@
         }
 
         chip.addEventListener('mouseenter', function(){ showVendorCard(v, chip); });
-        chip.addEventListener('mouseleave', function(){ hideVendorCard(); });
+        chip.addEventListener('mouseleave', function(){ scheduleHideVendorCard(); });
         chip.addEventListener('click', function(){ openVendorModal(v.id); });
 
         pool.appendChild(chip);
