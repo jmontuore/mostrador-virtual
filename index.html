@@ -1,0 +1,1537 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mapa de Mostrador Virtual — Atención Comercial</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --bg:#e9eaed;
+    --panel:#ffffff;
+    --border:#e2e4e9;
+    --text:#1f2430;
+    --muted:#6b7280;
+    --accent:#2f6feb;
+    --accent-light:#e8f0fe;
+    --empty:#f0f1f4;
+    --empty-border:#d3d6dd;
+    --filled:#2f6feb;
+    --filled-bg:#eaf1ff;
+    --danger:#d64545;
+    --ok:#1a9c5c;
+    --warn:#c98a12;
+    --off:#8a8f98;
+    --radius:12px;
+    --shadow:0 1px 2px rgba(16,24,40,.04), 0 1px 3px rgba(16,24,40,.06);
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg);
+    color:var(--text);
+  }
+  header{
+    padding:18px 24px;
+    background:var(--panel);
+    border-bottom:1px solid var(--border);
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    flex-wrap:wrap;
+    gap:12px;
+  }
+  header h1{
+    font-size:18px;
+    margin:0;
+    font-weight:600;
+  }
+  header .sub{
+    font-size:12.5px;
+    color:var(--muted);
+    margin-top:2px;
+  }
+  .header-actions{
+    display:flex;
+    gap:8px;
+  }
+  button{
+    font-family:inherit;
+    cursor:pointer;
+  }
+  .btn{
+    border:1px solid var(--border);
+    background:var(--panel);
+    color:var(--text);
+    padding:8px 14px;
+    border-radius:8px;
+    font-size:13px;
+    font-weight:500;
+    transition:background .15s, border-color .15s;
+  }
+  .btn:hover{background:#f7f8fa;}
+  .btn.primary{
+    background:var(--accent);
+    color:#fff;
+    border-color:var(--accent);
+  }
+  .btn.primary:hover{background:#2a5fd0;}
+  .btn.danger{
+    color:var(--danger);
+    border-color:#f2c9c9;
+  }
+  .btn.danger:hover{background:#fdf0f0;}
+  .btn.small{padding:5px 10px;font-size:12px;}
+  .btn.full{width:100%;}
+  .btn:disabled{opacity:.5; cursor:not-allowed;}
+
+  .layout{
+    display:grid;
+    grid-template-columns:280px 1fr 300px;
+    gap:16px;
+    padding:16px 20px 40px;
+    align-items:start;
+  }
+  @media (max-width: 1080px){
+    .layout{grid-template-columns:1fr;}
+  }
+
+  .panel{
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    box-shadow:var(--shadow);
+    padding:16px;
+  }
+  .panel h2{
+    font-size:13px;
+    text-transform:uppercase;
+    letter-spacing:.04em;
+    color:var(--muted);
+    margin:0 0 12px;
+    font-weight:600;
+  }
+
+  /* Sucursales */
+  .sucursal-list{
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+  }
+  .sucursal-item{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:9px 10px;
+    border-radius:8px;
+    border:1px solid transparent;
+    cursor:pointer;
+    font-size:13.5px;
+  }
+  .sucursal-item:hover{background:#f7f8fa;}
+  .sucursal-item.active{
+    background:var(--accent-light);
+    border-color:#c7dbfb;
+    font-weight:600;
+    color:var(--accent);
+  }
+  .sucursal-item .count{
+    font-size:11.5px;
+    color:var(--muted);
+    font-weight:400;
+  }
+  .sucursal-item.active .count{color:var(--accent);}
+
+  .sucursal-config{
+    margin-top:16px;
+    padding-top:14px;
+    border-top:1px solid var(--border);
+  }
+  .field{margin-bottom:12px;}
+  .field label{
+    display:block;
+    font-size:12px;
+    color:var(--muted);
+    margin-bottom:4px;
+  }
+  .field input[type=text], .field input[type=number], .field select{
+    width:100%;
+    padding:7px 9px;
+    border:1px solid var(--border);
+    border-radius:7px;
+    font-size:13.5px;
+    font-family:inherit;
+  }
+  .field input:focus, .field select:focus{outline:2px solid #c7dbfb; border-color:var(--accent);}
+
+  /* Sectores */
+  .sector-list{
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+    margin-bottom:10px;
+  }
+  .sector-row{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    padding:6px 8px;
+    background:#fafbfc;
+    border:1px solid var(--border);
+    border-radius:8px;
+  }
+  .sector-row input[type=text]{
+    flex:1;
+    min-width:0;
+    border:1px solid transparent;
+    background:transparent;
+    padding:3px 4px;
+    font-size:12.5px;
+    font-family:inherit;
+    border-radius:5px;
+  }
+  .sector-row input[type=text]:focus{border-color:var(--accent); background:#fff; outline:none;}
+  .sector-row input[type=number]{
+    width:48px;
+    border:1px solid var(--border);
+    border-radius:5px;
+    padding:3px 4px;
+    font-size:12.5px;
+    text-align:center;
+  }
+  .sector-row .del-sector{
+    border:none;
+    background:none;
+    color:var(--danger);
+    font-size:14px;
+    cursor:pointer;
+    line-height:1;
+  }
+
+  /* Mostrador view */
+  .mostrador-wrap{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:6px;
+  }
+  .mostrador-title{
+    font-size:16px;
+    font-weight:600;
+    margin-bottom:2px;
+    text-align:center;
+  }
+  .sector-tabs{
+    display:flex;
+    flex-wrap:wrap;
+    justify-content:center;
+    gap:6px;
+    margin:8px 0 4px;
+  }
+  .sector-tab{
+    padding:6px 12px;
+    border-radius:999px;
+    border:1px solid var(--border);
+    background:#fafbfc;
+    font-size:12.5px;
+    cursor:pointer;
+    color:var(--muted);
+  }
+  .sector-tab:hover{background:#f0f1f4;}
+  .sector-tab.active{
+    background:var(--accent);
+    border-color:var(--accent);
+    color:#fff;
+    font-weight:600;
+  }
+  .mostrador-sub{
+    font-size:12.5px;
+    color:var(--muted);
+    margin-bottom:14px;
+  }
+  .arc-stage{
+    position:relative;
+    width:100%;
+    max-width:640px;
+    height:340px;
+    margin:0 auto;
+  }
+  .arc-stage.empty-sector{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+  .empty-sector-msg{
+    color:var(--muted);
+    font-size:13px;
+    text-align:center;
+  }
+  .counter-shape{
+    position:absolute;
+    left:50%;
+    bottom:0;
+    transform:translateX(-50%);
+    width:92%;
+    height:60px;
+    background:linear-gradient(180deg,#dfe4ec,#c9d0dc);
+    border-radius:50% 50% 0 0 / 100% 100% 0 0;
+    box-shadow:inset 0 3px 6px rgba(0,0,0,.08);
+  }
+  .place{
+    position:absolute;
+    width:96px;
+    transform:translate(-50%,-50%);
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:6px;
+    cursor:pointer;
+  }
+  .place .puesto{
+    width:64px;
+    height:64px;
+    border-radius:14px;
+    background:var(--empty);
+    border:2px dashed var(--empty-border);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:20px;
+    color:var(--muted);
+    transition:all .15s;
+    position:relative;
+    overflow:hidden;
+  }
+  .place.filled .puesto{
+    background:var(--filled-bg);
+    border:2px solid var(--filled);
+    color:var(--filled);
+  }
+  .place .puesto img.avatar{
+    width:100%;
+    height:100%;
+    object-fit:cover;
+    border-radius:12px;
+  }
+  .place.dragover .puesto{
+    background:#fff7d6;
+    border-color:#e0b400;
+  }
+  .place .num-badge{
+    position:absolute;
+    top:-6px;
+    left:-6px;
+    background:#fff;
+    border:1px solid var(--border);
+    border-radius:50%;
+    width:20px;height:20px;
+    font-size:10.5px;
+    display:flex;align-items:center;justify-content:center;
+    color:var(--muted);
+    font-weight:600;
+    z-index:2;
+  }
+  .place .estado-dot{
+    position:absolute;
+    bottom:-2px;
+    right:-2px;
+    width:14px;height:14px;
+    border-radius:50%;
+    border:2px solid #fff;
+    z-index:2;
+  }
+  .place .name{
+    font-size:11.5px;
+    text-align:center;
+    line-height:1.25;
+    max-width:90px;
+    color:var(--text);
+    word-break:break-word;
+  }
+  .place .name.empty{color:var(--muted); font-style:italic;}
+  .place .clear-btn{
+    display:none;
+    font-size:10px;
+    color:var(--danger);
+    background:none;
+    border:none;
+    padding:0;
+  }
+  .place.filled:hover .clear-btn{display:inline;}
+
+  /* Vendedores pool */
+  .load-box textarea{
+    width:100%;
+    height:70px;
+    resize:vertical;
+    border:1px solid var(--border);
+    border-radius:8px;
+    padding:8px;
+    font-family:inherit;
+    font-size:13px;
+  }
+  .load-box .btn{margin-top:8px;}
+  .divider-text{
+    text-align:center;
+    font-size:11px;
+    color:var(--muted);
+    margin:8px 0;
+  }
+  .pool-list{
+    margin-top:14px;
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+    max-height:320px;
+    overflow-y:auto;
+  }
+  .pool-empty{
+    font-size:12.5px;
+    color:var(--muted);
+    text-align:center;
+    padding:16px 4px;
+  }
+  .chip{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    padding:8px 10px;
+    background:#fafbfc;
+    border:1px solid var(--border);
+    border-radius:8px;
+    font-size:13px;
+    cursor:grab;
+  }
+  .chip:active{cursor:grabbing;}
+  .chip .avatar-sm{
+    width:28px;height:28px;
+    border-radius:50%;
+    background:var(--accent-light);
+    color:var(--accent);
+    display:flex;align-items:center;justify-content:center;
+    font-size:11px;font-weight:700;
+    flex-shrink:0;
+    overflow:hidden;
+  }
+  .chip .avatar-sm img{width:100%;height:100%;object-fit:cover;}
+  .chip .info{flex:1; min-width:0;}
+  .chip .info .nm{font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .chip .info .cg{font-size:10.5px; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .chip .loc{
+    font-size:10px;
+    color:var(--muted);
+    white-space:nowrap;
+  }
+  .chip .actions{display:flex; gap:2px; flex-shrink:0;}
+  .chip .actions button{
+    border:none;
+    background:none;
+    font-size:13px;
+    cursor:pointer;
+    line-height:1;
+    padding:2px;
+  }
+  .chip .actions .edit{color:var(--muted);}
+  .chip .actions .del{color:var(--danger);}
+  .stats{
+    margin-top:14px;
+    padding-top:12px;
+    border-top:1px solid var(--border);
+    font-size:12.5px;
+    color:var(--muted);
+    display:flex;
+    justify-content:space-between;
+  }
+  .stats b{color:var(--text);}
+
+  .hint{
+    font-size:11.5px;
+    color:var(--muted);
+    text-align:center;
+    margin-top:20px;
+  }
+  input[type=file]{display:none;}
+
+  .toast{
+    position:fixed;
+    bottom:20px;
+    left:50%;
+    transform:translateX(-50%);
+    background:#1f2430;
+    color:#fff;
+    padding:9px 16px;
+    border-radius:8px;
+    font-size:13px;
+    opacity:0;
+    pointer-events:none;
+    transition:opacity .25s;
+    z-index:80;
+  }
+  .toast.show{opacity:1;}
+
+  /* Hover tooltip / vendor card */
+  .vendor-card{
+    position:fixed;
+    width:230px;
+    background:#fff;
+    border:1px solid var(--border);
+    border-radius:12px;
+    box-shadow:0 8px 24px rgba(16,24,40,.16);
+    padding:14px;
+    z-index:70;
+    display:none;
+    pointer-events:none;
+  }
+  .vendor-card.show{display:block;}
+  .vendor-card .vc-head{
+    display:flex;
+    gap:10px;
+    align-items:center;
+    margin-bottom:10px;
+  }
+  .vendor-card .vc-avatar{
+    width:46px;height:46px;
+    border-radius:50%;
+    background:var(--accent-light);
+    color:var(--accent);
+    display:flex;align-items:center;justify-content:center;
+    font-weight:700;
+    font-size:15px;
+    overflow:hidden;
+    flex-shrink:0;
+  }
+  .vendor-card .vc-avatar img{width:100%;height:100%;object-fit:cover;}
+  .vendor-card .vc-name{font-size:14px; font-weight:600;}
+  .vendor-card .vc-cargo{font-size:11.5px; color:var(--muted); margin-top:1px;}
+  .vendor-card .vc-row{
+    font-size:12.5px;
+    color:var(--text);
+    display:flex;
+    gap:6px;
+    margin-top:6px;
+  }
+  .vendor-card .vc-row .lbl{color:var(--muted); min-width:44px;}
+  .vendor-card .vc-badge{
+    display:inline-block;
+    font-size:11px;
+    font-weight:600;
+    padding:3px 9px;
+    border-radius:999px;
+    margin-top:8px;
+  }
+
+  /* Vendor edit modal */
+  .modal-overlay{
+    position:fixed;
+    inset:0;
+    background:rgba(20,22,28,.45);
+    display:none;
+    align-items:center;
+    justify-content:center;
+    z-index:90;
+  }
+  .modal-overlay.show{display:flex;}
+  .modal-box{
+    background:#fff;
+    border-radius:14px;
+    padding:22px;
+    width:360px;
+    max-width:92vw;
+    max-height:88vh;
+    overflow-y:auto;
+    box-shadow:0 20px 50px rgba(16,24,40,.25);
+  }
+  .modal-box h3{margin:0 0 14px; font-size:16px;}
+  .modal-box .field{margin-bottom:12px;}
+  .modal-actions{
+    display:flex;
+    gap:8px;
+    margin-top:16px;
+  }
+  .modal-actions .btn{flex:1;}
+  .avatar-preview{
+    width:64px;height:64px;
+    border-radius:50%;
+    background:var(--empty);
+    display:flex;align-items:center;justify-content:center;
+    overflow:hidden;
+    margin-bottom:10px;
+    border:1px solid var(--border);
+  }
+  .avatar-preview img{width:100%;height:100%;object-fit:cover;}
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Mapa de Mostrador Virtual</h1>
+    <div class="sub">Atención comercial · sucursales, sectores y ficha de cada vendedor</div>
+  </div>
+  <div class="header-actions">
+    <button class="btn" id="btnImport">Importar JSON</button>
+    <button class="btn primary" id="btnExport">Exportar JSON</button>
+    <input type="file" id="fileInput" accept="application/json">
+  </div>
+</header>
+
+<div class="layout">
+
+  <!-- Sucursales -->
+  <div class="panel">
+    <h2>Sucursales</h2>
+    <div class="sucursal-list" id="sucursalList"></div>
+    <button class="btn small full" id="btnAddSucursal" style="margin-top:8px;">+ Agregar sucursal</button>
+
+    <div class="sucursal-config">
+      <div class="field">
+        <label>Nombre de la sucursal</label>
+        <input type="text" id="sucursalNombre">
+      </div>
+      <button class="btn danger small full" id="btnDeleteSucursal">Eliminar esta sucursal</button>
+
+      <div class="field" style="margin-top:16px;">
+        <label>Sectores de atención (cada uno con su cantidad de lugares)</label>
+        <div class="sector-list" id="sectorList"></div>
+        <button class="btn small full" id="btnAddSector">+ Agregar sector</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mostrador -->
+  <div class="panel">
+    <div class="mostrador-wrap">
+      <div class="mostrador-title" id="mostradorTitle">Sucursal</div>
+      <div class="sector-tabs" id="sectorTabs"></div>
+      <div class="mostrador-sub" id="mostradorSub">0 / 0 puestos asignados</div>
+      <div class="arc-stage" id="arcStage">
+        <div class="counter-shape"></div>
+      </div>
+      <div class="hint">Arrastrá un vendedor y soltalo sobre un puesto. Pasá el mouse sobre un puesto ocupado para ver su ficha. Clic sobre un puesto ocupado para editar sus datos.</div>
+    </div>
+  </div>
+
+  <!-- Vendedores -->
+  <div class="panel">
+    <h2>Vendedores</h2>
+    <div class="load-box">
+      <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px;">Pegar lista (un nombre por línea)</label>
+      <textarea id="vendedoresInput" placeholder="Juan Pérez&#10;María Gómez&#10;Carlos Ruiz"></textarea>
+      <button class="btn primary full" id="btnCargarVendedores">Cargar vendedores</button>
+      <div class="divider-text">— o —</div>
+      <button class="btn full" id="btnCargarCSV">Subir lista desde CSV / Excel</button>
+      <input type="file" id="csvInput" accept=".csv,text/csv,.xlsx,.xls">
+    </div>
+    <div class="pool-list" id="poolList"></div>
+    <div class="stats">
+      <span>Sin asignar: <b id="statUnassigned">0</b></span>
+      <span>Total: <b id="statTotal">0</b></span>
+    </div>
+  </div>
+
+</div>
+
+<!-- Hover card -->
+<div class="vendor-card" id="vendorCard"></div>
+
+<!-- Edit modal -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal-box">
+    <h3 id="modalTitle">Editar vendedor</h3>
+    <div class="avatar-preview" id="modalAvatarPreview">👤</div>
+    <div class="field">
+      <label>Foto</label>
+      <input type="file" id="modalImagenInput" accept="image/*">
+      <button class="btn small full" id="btnPickImagen" style="margin-top:6px;">Elegir imagen</button>
+    </div>
+    <div class="field">
+      <label>Nombre</label>
+      <input type="text" id="modalNombre">
+    </div>
+    <div class="field">
+      <label>Cargo / puesto</label>
+      <input type="text" id="modalCargo" placeholder="Ej: VENDEDOR, AT. A EMPRESAS...">
+    </div>
+    <div class="field">
+      <label>Teléfono</label>
+      <input type="text" id="modalTelefono" placeholder="Ej: 299 000 0000">
+    </div>
+    <div class="field">
+      <label>Mail</label>
+      <input type="text" id="modalMail" placeholder="nombre@empresa.com">
+    </div>
+    <div class="field">
+      <label>Estado</label>
+      <select id="modalEstado">
+        <option value="Operativo">Operativo</option>
+        <option value="Vacaciones">Vacaciones</option>
+        <option value="Licencia">Licencia</option>
+        <option value="Franco">Franco</option>
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" id="btnCancelModal">Cancelar</button>
+      <button class="btn primary" id="btnSaveModal">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  // ---------- State ----------
+  // state.sucursales: [{ id, nombre, sectores: [{ id, nombre, lugares, asignaciones:{placeIdx: vendorId} }] }]
+  // state.vendedores: [{ id, nombre, cargo, telefono, mail, estado, imagen(dataURL) }]
+  var state = null;
+  var selectedSucursalId = 1;
+  var selectedSectorBySucursal = {};
+  var draggedVendorId = null;
+  var editingVendorId = null;
+  var pendingImagenDataUrl = null;
+
+  var DEFAULT_SECTOR_NAMES = ['Mostrador', 'Venta Empresas', 'Ventas Especiales', 'Cuentas Corrientes'];
+  var DEFAULT_SECTOR_LUGARES = { 'Mostrador': 8, 'Venta Empresas': 2, 'Ventas Especiales': 2, 'Cuentas Corrientes': 2 };
+
+  var ESTADO_COLORS = {
+    'Operativo': '#1a9c5c',
+    'Vacaciones': '#c98a12',
+    'Licencia': '#c94f4f',
+    'Franco': '#8a8f98'
+  };
+
+  function makeDefaultSectores(){
+    return DEFAULT_SECTOR_NAMES.map(function(name, i){
+      return { id: i+1, nombre: name, lugares: DEFAULT_SECTOR_LUGARES[name] || 2, asignaciones: {} };
+    });
+  }
+
+  function defaultState(){
+    var sucursales = [];
+    for(var i=1;i<=8;i++){
+      sucursales.push({ id:i, nombre:'Sucursal ' + i, sectores: makeDefaultSectores() });
+    }
+    return { sucursales: sucursales, vendedores: [] };
+  }
+
+  function migrateSucursal(suc){
+    if(suc.sectores && suc.sectores.length){
+      suc.sectores.forEach(function(sec){
+        if(!sec.asignaciones) sec.asignaciones = {};
+        if(typeof sec.lugares !== 'number') sec.lugares = 1;
+      });
+      return suc;
+    }
+    var sectores = [];
+    sectores.push({ id:1, nombre:'Mostrador', lugares: suc.lugares || 0, asignaciones: suc.asignaciones || {} });
+    DEFAULT_SECTOR_NAMES.slice(1).forEach(function(name, idx){
+      sectores.push({ id: idx+2, nombre:name, lugares: 0, asignaciones:{} });
+    });
+    delete suc.lugares;
+    delete suc.asignaciones;
+    suc.sectores = sectores;
+    return suc;
+  }
+
+  function migrateVendedor(v){
+    if(typeof v.cargo !== 'string') v.cargo = '';
+    if(typeof v.telefono !== 'string') v.telefono = '';
+    if(typeof v.mail !== 'string') v.mail = '';
+    if(typeof v.estado !== 'string') v.estado = 'Operativo';
+    if(typeof v.imagen !== 'string') v.imagen = '';
+    return v;
+  }
+
+  function loadState(){
+    state = defaultState();
+  }
+
+  // ---------- Utilities ----------
+  var idCounter = 1;
+  function nextId(){ return idCounter++; }
+
+  function getSucursal(id){
+    for(var i=0;i<state.sucursales.length;i++){
+      if(state.sucursales[i].id === id) return state.sucursales[i];
+    }
+    return null;
+  }
+
+  function getSector(suc, sectorId){
+    for(var i=0;i<suc.sectores.length;i++){
+      if(suc.sectores[i].id === sectorId) return suc.sectores[i];
+    }
+    return null;
+  }
+
+  function getSelectedSector(suc){
+    var sel = selectedSectorBySucursal[suc.id];
+    var sector = sel ? getSector(suc, sel) : null;
+    if(!sector) sector = suc.sectores[0];
+    selectedSectorBySucursal[suc.id] = sector ? sector.id : null;
+    return sector;
+  }
+
+  function getVendedor(id){
+    for(var i=0;i<state.vendedores.length;i++){
+      if(state.vendedores[i].id === id) return state.vendedores[i];
+    }
+    return null;
+  }
+
+  function initials(name){
+    var parts = name.trim().split(/\s+/);
+    if(parts.length === 1) return parts[0].substring(0,2).toUpperCase();
+    return (parts[0][0] + parts[parts.length-1][0]).toUpperCase();
+  }
+
+  function assignedVendorIds(){
+    var set = {};
+    state.sucursales.forEach(function(suc){
+      suc.sectores.forEach(function(sec){
+        Object.keys(sec.asignaciones).forEach(function(k){
+          set[sec.asignaciones[k]] = true;
+        });
+      });
+    });
+    return set;
+  }
+
+  function findAssignmentLocation(vendorId){
+    var result = null;
+    state.sucursales.forEach(function(s){
+      s.sectores.forEach(function(sec){
+        Object.keys(sec.asignaciones).forEach(function(k){
+          if(sec.asignaciones[k] === vendorId){
+            result = { sucursal: s, sector: sec, placeIndex: parseInt(k,10) };
+          }
+        });
+      });
+    });
+    return result;
+  }
+
+  function sucursalTotals(suc){
+    var total = 0, occupied = 0;
+    suc.sectores.forEach(function(sec){
+      total += sec.lugares;
+      occupied += Object.keys(sec.asignaciones).length;
+    });
+    return { total: total, occupied: occupied };
+  }
+
+  function showToast(msg){
+    var t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(function(){ t.classList.remove('show'); }, 1800);
+  }
+
+  function escapeHtml(str){
+    var div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  function avatarHtml(vendor, sizeClass){
+    if(vendor.imagen){
+      return '<img src="' + vendor.imagen + '" alt="">';
+    }
+    return escapeHtml(initials(vendor.nombre));
+  }
+
+  // ---------- Render: Sucursal list ----------
+  function renderSucursalList(){
+    var list = document.getElementById('sucursalList');
+    list.innerHTML = '';
+    state.sucursales.forEach(function(suc){
+      var div = document.createElement('div');
+      div.className = 'sucursal-item' + (suc.id === selectedSucursalId ? ' active' : '');
+      var totals = sucursalTotals(suc);
+      div.innerHTML = '<span>' + escapeHtml(suc.nombre) + '</span><span class="count">' + totals.occupied + '/' + totals.total + '</span>';
+      div.addEventListener('click', function(){
+        selectedSucursalId = suc.id;
+        renderAll();
+      });
+      list.appendChild(div);
+    });
+
+    var delBtn = document.getElementById('btnDeleteSucursal');
+    delBtn.disabled = state.sucursales.length <= 1;
+
+    var suc = getSucursal(selectedSucursalId);
+    document.getElementById('sucursalNombre').value = suc.nombre;
+    renderSectorConfig(suc);
+  }
+
+  function renderSectorConfig(suc){
+    var wrap = document.getElementById('sectorList');
+    wrap.innerHTML = '';
+    suc.sectores.forEach(function(sec){
+      var row = document.createElement('div');
+      row.className = 'sector-row';
+
+      var nameInput = document.createElement('input');
+      nameInput.type = 'text';
+      nameInput.value = sec.nombre;
+      nameInput.addEventListener('input', function(e){
+        sec.nombre = e.target.value;
+        renderMostrador();
+      });
+
+      var lugaresInput = document.createElement('input');
+      lugaresInput.type = 'number';
+      lugaresInput.min = '0';
+      lugaresInput.max = '24';
+      lugaresInput.value = sec.lugares;
+      lugaresInput.addEventListener('input', function(e){
+        var val = parseInt(e.target.value,10);
+        if(isNaN(val) || val < 0) val = 0;
+        if(val > 24) val = 24;
+        sec.lugares = val;
+        Object.keys(sec.asignaciones).forEach(function(k){
+          if(parseInt(k,10) >= val) delete sec.asignaciones[k];
+        });
+        renderAll();
+      });
+
+      var delBtn = document.createElement('button');
+      delBtn.className = 'del-sector';
+      delBtn.textContent = '✕';
+      delBtn.title = 'Eliminar sector';
+      delBtn.addEventListener('click', function(){
+        if(suc.sectores.length <= 1){
+          showToast('La sucursal debe tener al menos un sector.');
+          return;
+        }
+        if(!confirm('¿Eliminar el sector "' + sec.nombre + '"?')) return;
+        suc.sectores = suc.sectores.filter(function(s){ return s.id !== sec.id; });
+        if(selectedSectorBySucursal[suc.id] === sec.id){
+          selectedSectorBySucursal[suc.id] = suc.sectores[0].id;
+        }
+        renderAll();
+      });
+
+      row.appendChild(nameInput);
+      row.appendChild(lugaresInput);
+      row.appendChild(delBtn);
+      wrap.appendChild(row);
+    });
+  }
+
+  // ---------- Render: Mostrador (sector tabs + arc of places) ----------
+  function renderMostrador(){
+    var suc = getSucursal(selectedSucursalId);
+    document.getElementById('mostradorTitle').textContent = suc.nombre;
+
+    var sector = getSelectedSector(suc);
+
+    var tabsWrap = document.getElementById('sectorTabs');
+    tabsWrap.innerHTML = '';
+    suc.sectores.forEach(function(sec){
+      var tab = document.createElement('div');
+      tab.className = 'sector-tab' + (sector && sec.id === sector.id ? ' active' : '');
+      tab.textContent = sec.nombre + ' (' + sec.lugares + ')';
+      tab.addEventListener('click', function(){
+        selectedSectorBySucursal[suc.id] = sec.id;
+        renderMostrador();
+      });
+      tabsWrap.appendChild(tab);
+    });
+
+    var stage = document.getElementById('arcStage');
+
+    if(!sector || sector.lugares === 0){
+      document.getElementById('mostradorSub').textContent = 'Este sector no tiene puestos configurados';
+      stage.innerHTML = '<div class="empty-sector-msg">Agregá lugares a este sector desde el panel de la izquierda.</div>';
+      stage.className = 'arc-stage empty-sector';
+      return;
+    }
+    stage.className = 'arc-stage';
+    stage.innerHTML = '<div class="counter-shape"></div>';
+
+    var occupied = Object.keys(sector.asignaciones).length;
+    document.getElementById('mostradorSub').textContent = occupied + ' / ' + sector.lugares + ' puestos asignados en ' + sector.nombre;
+
+    var n = sector.lugares;
+    var stageW = stage.clientWidth || 640;
+    var stageH = 340;
+    var cx = stageW/2;
+    var cy = stageH - 30;
+    var radiusX = stageW*0.42;
+    var radiusY = stageH*0.62;
+
+    for(var i=0;i<n;i++){
+      var t = n === 1 ? 0.5 : i/(n-1);
+      var theta = Math.PI - t*Math.PI;
+      var posX = cx - radiusX*Math.cos(theta);
+      var posY = cy - radiusY*Math.sin(theta);
+
+      (function(index, posX, posY){
+        var place = document.createElement('div');
+        place.className = 'place';
+        place.style.left = posX + 'px';
+        place.style.top = posY + 'px';
+
+        var vendorId = sector.asignaciones[index];
+        var vendor = vendorId !== undefined ? getVendedor(vendorId) : null;
+        if(vendor) place.className += ' filled';
+
+        var puesto = document.createElement('div');
+        puesto.className = 'puesto';
+
+        var badge = document.createElement('div');
+        badge.className = 'num-badge';
+        badge.textContent = index+1;
+        puesto.appendChild(badge);
+
+        if(vendor){
+          puesto.innerHTML += avatarHtml(vendor);
+          var dot = document.createElement('div');
+          dot.className = 'estado-dot';
+          dot.style.background = ESTADO_COLORS[vendor.estado] || ESTADO_COLORS['Operativo'];
+          puesto.appendChild(dot);
+        } else {
+          puesto.appendChild(document.createTextNode(index+1));
+        }
+
+        var nameEl = document.createElement('div');
+        nameEl.className = 'name' + (vendor ? '' : ' empty');
+        nameEl.textContent = vendor ? vendor.nombre : 'Vacío';
+
+        place.appendChild(puesto);
+        place.appendChild(nameEl);
+
+        if(vendor){
+          var clearBtn = document.createElement('button');
+          clearBtn.className = 'clear-btn';
+          clearBtn.textContent = 'Quitar';
+          clearBtn.addEventListener('click', function(e){
+            e.stopPropagation();
+            delete sector.asignaciones[index];
+            hideVendorCard();
+            renderAll();
+          });
+          place.appendChild(clearBtn);
+
+          place.addEventListener('mouseenter', function(e){
+            showVendorCard(vendor, place);
+          });
+          place.addEventListener('mouseleave', function(){
+            hideVendorCard();
+          });
+          place.addEventListener('click', function(){
+            openVendorModal(vendor.id);
+          });
+        } else {
+          place.addEventListener('click', function(){
+            openPickerForPlace(suc.id, sector.id, index);
+          });
+        }
+
+        place.addEventListener('dragover', function(e){
+          e.preventDefault();
+          place.classList.add('dragover');
+        });
+        place.addEventListener('dragleave', function(){
+          place.classList.remove('dragover');
+        });
+        place.addEventListener('drop', function(e){
+          e.preventDefault();
+          place.classList.remove('dragover');
+          if(draggedVendorId !== null){
+            assignVendorToPlace(draggedVendorId, suc.id, sector.id, index);
+            draggedVendorId = null;
+          }
+        });
+
+        stage.appendChild(place);
+      })(i, posX, posY);
+    }
+  }
+
+  function assignVendorToPlace(vendorId, sucId, sectorId, placeIndex){
+    var suc = getSucursal(sucId);
+    var sector = getSector(suc, sectorId);
+    state.sucursales.forEach(function(s){
+      s.sectores.forEach(function(sec){
+        Object.keys(sec.asignaciones).forEach(function(k){
+          if(sec.asignaciones[k] === vendorId) delete sec.asignaciones[k];
+        });
+      });
+    });
+    sector.asignaciones[placeIndex] = vendorId;
+    renderAll();
+  }
+
+  function openPickerForPlace(sucId, sectorId, placeIndex){
+    var assigned = assignedVendorIds();
+    var available = state.vendedores.filter(function(v){ return !assigned[v.id]; });
+    if(available.length === 0){
+      showToast('No hay vendedores libres para asignar. Cargá la lista o liberá alguno.');
+      return;
+    }
+    var names = available.map(function(v,i){ return (i+1) + '. ' + v.nombre + (v.cargo ? ' (' + v.cargo + ')' : ''); }).join('\n');
+    var input = prompt('Elegí el número del vendedor para el puesto ' + (placeIndex+1) + ':\n\n' + names);
+    if(input === null) return;
+    var idx = parseInt(input,10) - 1;
+    if(isNaN(idx) || idx < 0 || idx >= available.length){
+      showToast('Selección inválida.');
+      return;
+    }
+    assignVendorToPlace(available[idx].id, sucId, sectorId, placeIndex);
+  }
+
+  // ---------- Hover vendor card ----------
+  function showVendorCard(vendor, anchorEl){
+    var card = document.getElementById('vendorCard');
+    var color = ESTADO_COLORS[vendor.estado] || ESTADO_COLORS['Operativo'];
+    card.innerHTML =
+      '<div class="vc-head">' +
+        '<div class="vc-avatar">' + avatarHtml(vendor) + '</div>' +
+        '<div><div class="vc-name">' + escapeHtml(vendor.nombre) + '</div>' +
+        '<div class="vc-cargo">' + escapeHtml(vendor.cargo || 'Sin cargo asignado') + '</div></div>' +
+      '</div>' +
+      '<div class="vc-row"><span class="lbl">Tel:</span><span>' + escapeHtml(vendor.telefono || '—') + '</span></div>' +
+      '<div class="vc-row"><span class="lbl">Mail:</span><span>' + escapeHtml(vendor.mail || '—') + '</span></div>' +
+      '<div class="vc-badge" style="background:' + color + '22; color:' + color + ';">' + escapeHtml(vendor.estado || 'Operativo') + '</div>';
+
+    var rect = anchorEl.getBoundingClientRect();
+    var cardW = 230;
+    var left = rect.left + rect.width/2 - cardW/2;
+    left = Math.max(10, Math.min(left, window.innerWidth - cardW - 10));
+    var top = rect.top - 10;
+    card.style.left = left + 'px';
+    // position above the place; if not enough room, put below
+    if(top - 190 < 0){
+      card.style.top = (rect.bottom + 10) + 'px';
+    } else {
+      card.style.transform = 'translateY(-100%)';
+      card.style.top = top + 'px';
+    }
+    card.classList.add('show');
+  }
+  function hideVendorCard(){
+    var card = document.getElementById('vendorCard');
+    card.classList.remove('show');
+    card.style.transform = '';
+  }
+
+  // ---------- Vendor edit modal ----------
+  function openVendorModal(vendorId){
+    var v = getVendedor(vendorId);
+    if(!v) return;
+    editingVendorId = vendorId;
+    pendingImagenDataUrl = v.imagen || null;
+    document.getElementById('modalTitle').textContent = 'Editar vendedor';
+    document.getElementById('modalNombre').value = v.nombre;
+    document.getElementById('modalCargo').value = v.cargo || '';
+    document.getElementById('modalTelefono').value = v.telefono || '';
+    document.getElementById('modalMail').value = v.mail || '';
+    document.getElementById('modalEstado').value = v.estado || 'Operativo';
+    updateAvatarPreview(v);
+    hideVendorCard();
+    document.getElementById('modalOverlay').classList.add('show');
+  }
+
+  function updateAvatarPreview(v){
+    var preview = document.getElementById('modalAvatarPreview');
+    var img = pendingImagenDataUrl || (v && v.imagen) || null;
+    if(img){
+      preview.innerHTML = '<img src="' + img + '" alt="">';
+    } else {
+      preview.textContent = '👤';
+    }
+  }
+
+  function closeVendorModal(){
+    document.getElementById('modalOverlay').classList.remove('show');
+    editingVendorId = null;
+    pendingImagenDataUrl = null;
+    document.getElementById('modalImagenInput').value = '';
+  }
+
+  document.getElementById('btnPickImagen').addEventListener('click', function(){
+    document.getElementById('modalImagenInput').click();
+  });
+
+  document.getElementById('modalImagenInput').addEventListener('change', function(e){
+    var file = e.target.files[0];
+    if(!file) return;
+    var reader = new FileReader();
+    reader.onload = function(evt){
+      pendingImagenDataUrl = evt.target.result;
+      updateAvatarPreview(null);
+    };
+    reader.readAsDataURL(file);
+  });
+
+  document.getElementById('btnCancelModal').addEventListener('click', closeVendorModal);
+  document.getElementById('modalOverlay').addEventListener('click', function(e){
+    if(e.target === document.getElementById('modalOverlay')) closeVendorModal();
+  });
+
+  document.getElementById('btnSaveModal').addEventListener('click', function(){
+    var v = getVendedor(editingVendorId);
+    if(!v) { closeVendorModal(); return; }
+    var newName = document.getElementById('modalNombre').value.trim();
+    if(newName.length === 0){
+      showToast('El nombre no puede quedar vacío.');
+      return;
+    }
+    v.nombre = newName;
+    v.cargo = document.getElementById('modalCargo').value.trim();
+    v.telefono = document.getElementById('modalTelefono').value.trim();
+    v.mail = document.getElementById('modalMail').value.trim();
+    v.estado = document.getElementById('modalEstado').value;
+    if(pendingImagenDataUrl !== null) v.imagen = pendingImagenDataUrl;
+    closeVendorModal();
+    renderAll();
+    showToast('Ficha actualizada.');
+  });
+
+  // ---------- Render: Vendedores pool ----------
+  function renderPool(){
+    var pool = document.getElementById('poolList');
+    pool.innerHTML = '';
+    var assigned = assignedVendorIds();
+
+    if(state.vendedores.length === 0){
+      pool.innerHTML = '<div class="pool-empty">Todavía no cargaste vendedores.</div>';
+    } else {
+      state.vendedores.forEach(function(v){
+        var chip = document.createElement('div');
+        chip.className = 'chip';
+        chip.setAttribute('draggable','true');
+
+        var isAssigned = !!assigned[v.id];
+        var locText = '';
+        if(isAssigned){
+          var loc = findAssignmentLocation(v.id);
+          if(loc){
+            locText = loc.sucursal.nombre + ' · ' + loc.sector.nombre + ' P' + (loc.placeIndex+1);
+          }
+        }
+
+        var avatar = document.createElement('div');
+        avatar.className = 'avatar-sm';
+        avatar.innerHTML = avatarHtml(v);
+
+        var info = document.createElement('div');
+        info.className = 'info';
+        info.innerHTML = '<div class="nm">' + escapeHtml(v.nombre) + '</div>' +
+          '<div class="cg">' + escapeHtml(v.cargo || 'Sin cargo') + (locText ? ' · ' + escapeHtml(locText) : '') + '</div>';
+
+        var actions = document.createElement('div');
+        actions.className = 'actions';
+
+        var editBtn = document.createElement('button');
+        editBtn.className = 'edit';
+        editBtn.textContent = '✎';
+        editBtn.title = 'Editar ficha';
+        editBtn.addEventListener('click', function(e){
+          e.stopPropagation();
+          openVendorModal(v.id);
+        });
+
+        var del = document.createElement('button');
+        del.className = 'del';
+        del.textContent = '✕';
+        del.title = 'Eliminar vendedor';
+        del.addEventListener('click', function(e){
+          e.stopPropagation();
+          state.vendedores = state.vendedores.filter(function(x){ return x.id !== v.id; });
+          state.sucursales.forEach(function(s){
+            s.sectores.forEach(function(sec){
+              Object.keys(sec.asignaciones).forEach(function(k){
+                if(sec.asignaciones[k] === v.id) delete sec.asignaciones[k];
+              });
+            });
+          });
+          renderAll();
+        });
+
+        actions.appendChild(editBtn);
+        actions.appendChild(del);
+
+        chip.appendChild(avatar);
+        chip.appendChild(info);
+        chip.appendChild(actions);
+
+        chip.addEventListener('mouseenter', function(){ showVendorCard(v, chip); });
+        chip.addEventListener('mouseleave', function(){ hideVendorCard(); });
+
+        chip.addEventListener('dragstart', function(){
+          draggedVendorId = v.id;
+          chip.style.opacity = '0.5';
+          hideVendorCard();
+        });
+        chip.addEventListener('dragend', function(){
+          chip.style.opacity = '1';
+        });
+
+        pool.appendChild(chip);
+      });
+    }
+
+    var assignedCount = Object.keys(assigned).length;
+    document.getElementById('statUnassigned').textContent = state.vendedores.length - assignedCount;
+    document.getElementById('statTotal').textContent = state.vendedores.length;
+  }
+
+  function renderAll(){
+    renderSucursalList();
+    renderMostrador();
+    renderPool();
+  }
+
+  // ---------- Vendor import helpers ----------
+  function addOrUpdateVendors(entries){
+    // entries: array of { nombre, cargo? }
+    var byName = {};
+    state.vendedores.forEach(function(v){ byName[v.nombre.trim().toLowerCase()] = v; });
+    var added = 0, updated = 0;
+    entries.forEach(function(entry){
+      var nombre = (typeof entry === 'string' ? entry : entry.nombre || '').trim();
+      if(nombre.length === 0) return;
+      var cargo = (typeof entry === 'object' && entry.cargo) ? entry.cargo.trim() : '';
+      var key = nombre.toLowerCase();
+      if(byName[key]){
+        if(cargo && !byName[key].cargo){
+          byName[key].cargo = cargo;
+          updated++;
+        }
+      } else {
+        var v = migrateVendedor({ id: nextId(), nombre: nombre, cargo: cargo });
+        state.vendedores.push(v);
+        byName[key] = v;
+        added++;
+      }
+    });
+    return { added: added, updated: updated };
+  }
+
+  function parseCsvLine(line){
+    var result = [];
+    var cur = '';
+    var inQuotes = false;
+    for(var i=0;i<line.length;i++){
+      var c = line[i];
+      if(c === '"'){
+        inQuotes = !inQuotes;
+      } else if(c === ',' && !inQuotes){
+        result.push(cur);
+        cur = '';
+      } else {
+        cur += c;
+      }
+    }
+    result.push(cur);
+    return result;
+  }
+
+  function extractEntriesFromCsvText(text){
+    var lines = text.split(/\r\n|\n|\r/).map(function(l){ return l.trim(); }).filter(function(l){ return l.length > 0; });
+    var entries = [];
+    lines.forEach(function(line, idx){
+      var fields = parseCsvLine(line).map(function(f){ return f.trim(); });
+      var first = fields[0] || '';
+      if(idx === 0 && /^nombre$|^vendedor$|^apellido/i.test(first)){
+        return;
+      }
+      if(first.length > 0) entries.push({ nombre: first, cargo: fields[1] || '' });
+    });
+    return entries;
+  }
+
+  function extractEntriesFromWorkbookRows(rows){
+    var entries = [];
+    rows.forEach(function(row, idx){
+      if(!row || row.length === 0) return;
+      var first = row[0] != null ? String(row[0]).trim() : '';
+      if(first.length === 0) return;
+      if(idx === 0 && /^nombre$|^vendedor$|^apellido/i.test(first)) return;
+      var cargo = row[1] != null ? String(row[1]).trim() : '';
+      entries.push({ nombre: first, cargo: cargo });
+    });
+    return entries;
+  }
+
+  // ---------- Sucursal / Sector management ----------
+  function addSucursal(){
+    var maxId = state.sucursales.reduce(function(m,s){ return Math.max(m,s.id); }, 0);
+    var newId = maxId + 1;
+    var newSuc = { id:newId, nombre:'Sucursal ' + newId, sectores: makeDefaultSectores() };
+    state.sucursales.push(newSuc);
+    selectedSucursalId = newId;
+    renderAll();
+    showToast('Sucursal agregada.');
+  }
+
+  function deleteSucursal(id){
+    if(state.sucursales.length <= 1) return;
+    var suc = getSucursal(id);
+    if(!confirm('¿Eliminar la sucursal "' + suc.nombre + '"? Se liberarán los vendedores asignados ahí.')) return;
+    state.sucursales = state.sucursales.filter(function(s){ return s.id !== id; });
+    if(selectedSucursalId === id){
+      selectedSucursalId = state.sucursales[0].id;
+    }
+    renderAll();
+    showToast('Sucursal eliminada.');
+  }
+
+  function addSector(suc){
+    var maxId = suc.sectores.reduce(function(m,s){ return Math.max(m,s.id); }, 0);
+    var newId = maxId + 1;
+    var newSec = { id:newId, nombre:'Nuevo sector', lugares:2, asignaciones:{} };
+    suc.sectores.push(newSec);
+    selectedSectorBySucursal[suc.id] = newId;
+    renderAll();
+  }
+
+  // ---------- Event bindings ----------
+  document.getElementById('sucursalNombre').addEventListener('input', function(e){
+    var suc = getSucursal(selectedSucursalId);
+    suc.nombre = e.target.value;
+    renderSucursalList();
+    document.getElementById('mostradorTitle').textContent = suc.nombre;
+  });
+
+  document.getElementById('btnAddSucursal').addEventListener('click', function(){
+    addSucursal();
+  });
+
+  document.getElementById('btnDeleteSucursal').addEventListener('click', function(){
+    deleteSucursal(selectedSucursalId);
+  });
+
+  document.getElementById('btnAddSector').addEventListener('click', function(){
+    var suc = getSucursal(selectedSucursalId);
+    addSector(suc);
+  });
+
+  document.getElementById('btnCargarVendedores').addEventListener('click', function(){
+    var raw = document.getElementById('vendedoresInput').value;
+    var lines = raw.split('\n');
+    if(lines.join('').trim().length === 0){
+      showToast('Escribí al menos un nombre.');
+      return;
+    }
+    var result = addOrUpdateVendors(lines);
+    document.getElementById('vendedoresInput').value = '';
+    renderAll();
+    showToast(result.added + ' vendedor(es) agregado(s).');
+  });
+
+  document.getElementById('btnCargarCSV').addEventListener('click', function(){
+    document.getElementById('csvInput').click();
+  });
+
+  document.getElementById('csvInput').addEventListener('change', function(e){
+    var file = e.target.files[0];
+    if(!file) return;
+    var isExcel = /\.xlsx?$/i.test(file.name);
+
+    if(isExcel){
+      var reader2 = new FileReader();
+      reader2.onload = function(evt){
+        try{
+          var data = new Uint8Array(evt.target.result);
+          var wb = XLSX.read(data, { type: 'array' });
+          var allEntries = [];
+          wb.SheetNames.forEach(function(sheetName){
+            var ws = wb.Sheets[sheetName];
+            var rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+            allEntries = allEntries.concat(extractEntriesFromWorkbookRows(rows));
+          });
+          if(allEntries.length === 0){
+            showToast('No se encontraron nombres en el archivo Excel.');
+            return;
+          }
+          var result = addOrUpdateVendors(allEntries);
+          renderAll();
+          showToast(result.added + ' vendedor(es) agregado(s), ' + result.updated + ' con cargo completado, desde Excel.');
+        }catch(err){
+          showToast('Error al leer el archivo Excel.');
+        }
+      };
+      reader2.onerror = function(){ showToast('Error al leer el archivo.'); };
+      reader2.readAsArrayBuffer(file);
+    } else {
+      var reader = new FileReader();
+      reader.onload = function(evt){
+        var entries = extractEntriesFromCsvText(evt.target.result);
+        if(entries.length === 0){
+          showToast('No se encontraron nombres en el CSV.');
+          return;
+        }
+        var result = addOrUpdateVendors(entries);
+        renderAll();
+        showToast(result.added + ' vendedor(es) agregado(s) desde CSV.');
+      };
+      reader.onerror = function(){ showToast('Error al leer el archivo CSV.'); };
+      reader.readAsText(file);
+    }
+    e.target.value = '';
+  });
+
+  document.getElementById('btnExport').addEventListener('click', function(){
+    var dataStr = JSON.stringify({ state: state, idCounter: idCounter, selectedSucursalId: selectedSucursalId }, null, 2);
+    var blob = new Blob([dataStr], { type:'application/json' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'mostrador-virtual.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast('Configuración exportada.');
+  });
+
+  document.getElementById('btnImport').addEventListener('click', function(){
+    document.getElementById('fileInput').click();
+  });
+
+  document.getElementById('fileInput').addEventListener('change', function(e){
+    var file = e.target.files[0];
+    if(!file) return;
+    var reader = new FileReader();
+    reader.onload = function(evt){
+      try{
+        var data = JSON.parse(evt.target.result);
+        if(data.state && data.state.sucursales && data.state.vendedores){
+          state = data.state;
+          state.sucursales.forEach(migrateSucursal);
+          state.vendedores.forEach(migrateVendedor);
+          idCounter = data.idCounter || (Math.max.apply(null, state.vendedores.map(function(v){return v.id;}).concat([0])) + 1);
+          selectedSucursalId = data.selectedSucursalId || state.sucursales[0].id;
+          selectedSectorBySucursal = {};
+          renderAll();
+          showToast('Configuración importada correctamente.');
+        } else {
+          showToast('El archivo no tiene el formato esperado.');
+        }
+      }catch(err){
+        showToast('Error al leer el archivo JSON.');
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  });
+
+  window.addEventListener('resize', function(){
+    renderMostrador();
+  });
+
+  // ---------- Init ----------
+  loadState();
+  renderAll();
+})();
+</script>
+
+</body>
+</html>
+
+
