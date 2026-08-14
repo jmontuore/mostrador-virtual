@@ -692,17 +692,14 @@
   var pendingImagenDataUrl = null;
 
   // Clave para habilitar carga/edición/eliminación de vendedores.
+  // Se pide siempre, en cada acción, sin quedar "desbloqueada".
   // Cambiala por la que quieras usar en tu equipo.
   var EDIT_PASSWORD = 'mostrador2026';
-  var editUnlocked = (sessionStorage.getItem('mv_edit_unlocked') === '1');
 
   function requireEditPermission(){
-    if(editUnlocked) return true;
     var pass = prompt('Ingresá la clave para cargar o modificar vendedores:');
     if(pass === null) return false;
     if(pass === EDIT_PASSWORD){
-      editUnlocked = true;
-      sessionStorage.setItem('mv_edit_unlocked', '1');
       return true;
     }
     showToast('Clave incorrecta.');
