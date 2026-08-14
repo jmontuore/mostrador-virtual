@@ -671,10 +671,15 @@
         <input type="text" id="sucursalDireccion" placeholder="Ej: Av. Argentina 123">
       </div>
       <div class="field">
-        <label>Horario de atención</label>
+        <label>Horario de atención — turno mañana</label>
         <div class="horario-row">
           <input type="time" id="horarioApertura">
           <input type="time" id="horarioCierre">
+        </div>
+        <label style="margin-top:10px;">Turno tarde (dejar vacío si el horario es corrido)</label>
+        <div class="horario-row">
+          <input type="time" id="horarioApertura2">
+          <input type="time" id="horarioCierre2">
         </div>
         <div class="dias-semana" id="diasSemana"></div>
       </div>
@@ -871,6 +876,8 @@
     if(suc.horario && typeof suc.horario === 'object'){
       if(typeof suc.horario.open !== 'string') suc.horario.open = '';
       if(typeof suc.horario.close !== 'string') suc.horario.close = '';
+      if(typeof suc.horario.open2 !== 'string') suc.horario.open2 = '';
+      if(typeof suc.horario.close2 !== 'string') suc.horario.close2 = '';
       if(!Array.isArray(suc.horario.dias)) suc.horario.dias = [1,2,3,4,5];
     } else {
       suc.horario = null;
@@ -901,24 +908,32 @@
     return parseInt(m[1],10)*60 + parseInt(m[2],10);
   }
 
-  function sucursalEstado(suc){
-    var h = suc.horario;
-    if(!h || !h.open || !h.close) return null;
-    var openMin = parseHora(h.open);
-    var closeMin = parseHora(h.close);
-    if(openMin === null || closeMin === null) return null;
-    var now = new Date();
-    var dias = (h.dias && h.dias.length) ? h.dias : [0,1,2,3,4,5,6];
-    var mins = now.getHours()*60 + now.getMinutes();
+  function estaEnRango(openStr, closeStr, dias, now, mins){
+    var openMin = parseHora(openStr);
+    var closeMin = parseHora(closeStr);
+    if(openMin === null || closeMin === null) return false;
     if(closeMin > openMin){
-      if(dias.indexOf(now.getDay()) === -1) return 'cerrada';
-      return (mins >= openMin && mins < closeMin) ? 'abierta' : 'cerrada';
+      if(dias.indexOf(now.getDay()) === -1) return false;
+      return mins >= openMin && mins < closeMin;
     }
     // horario que cruza la medianoche (ej: 22:00 a 06:00)
     var isAfterOpen = mins >= openMin && dias.indexOf(now.getDay()) !== -1;
     var prevDay = (now.getDay() + 6) % 7;
     var isBeforeCloseFromPrevDay = mins < closeMin && dias.indexOf(prevDay) !== -1;
-    return (isAfterOpen || isBeforeCloseFromPrevDay) ? 'abierta' : 'cerrada';
+    return isAfterOpen || isBeforeCloseFromPrevDay;
+  }
+
+  function sucursalEstado(suc){
+    var h = suc.horario;
+    if(!h || !h.open || !h.close) return null;
+    var now = new Date();
+    var dias = (h.dias && h.dias.length) ? h.dias : [0,1,2,3,4,5,6];
+    var mins = now.getHours()*60 + now.getMinutes();
+    var abierta = estaEnRango(h.open, h.close, dias, now, mins);
+    if(!abierta && h.open2 && h.close2){
+      abierta = estaEnRango(h.open2, h.close2, dias, now, mins);
+    }
+    return abierta ? 'abierta' : 'cerrada';
   }
 
   function estadoBadgeHtml(suc){
@@ -1092,6 +1107,8 @@
     document.getElementById('sucursalDireccion').value = suc.direccion || '';
     document.getElementById('horarioApertura').value = (suc.horario && suc.horario.open) || '';
     document.getElementById('horarioCierre').value = (suc.horario && suc.horario.close) || '';
+    document.getElementById('horarioApertura2').value = (suc.horario && suc.horario.open2) || '';
+    document.getElementById('horarioCierre2').value = (suc.horario && suc.horario.close2) || '';
 
     var wrap = document.getElementById('diasSemana');
     wrap.innerHTML = '';
@@ -1117,7 +1134,11 @@
     if(suc.horario && suc.horario.open && suc.horario.close){
       var dias = (suc.horario.dias || []).slice().sort();
       var diasTxt = dias.length === 7 ? 'Todos los días' : dias.map(function(d){ return DIA_LABELS[d]; }).join(' ');
-      horarioHtml = escapeHtml((diasTxt ? diasTxt + ' ' : '') + suc.horario.open + '–' + suc.horario.close);
+      var rangoTxt = suc.horario.open + '–' + suc.horario.close;
+      if(suc.horario.open2 && suc.horario.close2){
+        rangoTxt += ' y ' + suc.horario.open2 + '–' + suc.horario.close2;
+      }
+      horarioHtml = escapeHtml((diasTxt ? diasTxt + ' ' : '') + rangoTxt);
     }
     var estadoHtml = estadoBadgeHtml(suc);
     var metaBits = [direccionHtml, horarioHtml].filter(Boolean);
@@ -1742,7 +1763,7 @@
 
   document.getElementById('horarioApertura').addEventListener('input', function(e){
     var suc = getSucursal(selectedSucursalId);
-    if(!suc.horario) suc.horario = { open:'', close:'', dias:[1,2,3,4,5] };
+    if(!suc.horario) suc.horario = { open:'', close:'', open2:'', close2:'', dias:[1,2,3,4,5] };
     suc.horario.open = e.target.value;
     renderSucursalList();
     renderMostrador();
@@ -1750,8 +1771,24 @@
 
   document.getElementById('horarioCierre').addEventListener('input', function(e){
     var suc = getSucursal(selectedSucursalId);
-    if(!suc.horario) suc.horario = { open:'', close:'', dias:[1,2,3,4,5] };
+    if(!suc.horario) suc.horario = { open:'', close:'', open2:'', close2:'', dias:[1,2,3,4,5] };
     suc.horario.close = e.target.value;
+    renderSucursalList();
+    renderMostrador();
+  });
+
+  document.getElementById('horarioApertura2').addEventListener('input', function(e){
+    var suc = getSucursal(selectedSucursalId);
+    if(!suc.horario) suc.horario = { open:'', close:'', open2:'', close2:'', dias:[1,2,3,4,5] };
+    suc.horario.open2 = e.target.value;
+    renderSucursalList();
+    renderMostrador();
+  });
+
+  document.getElementById('horarioCierre2').addEventListener('input', function(e){
+    var suc = getSucursal(selectedSucursalId);
+    if(!suc.horario) suc.horario = { open:'', close:'', open2:'', close2:'', dias:[1,2,3,4,5] };
+    suc.horario.close2 = e.target.value;
     renderSucursalList();
     renderMostrador();
   });
