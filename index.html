@@ -302,8 +302,9 @@
   .mostrador-sub{
     font-size:12.5px;
     color:var(--muted);
-    margin-bottom:14px;
+    margin-bottom:8px;
   }
+  #btnExportarExcel{margin-bottom:14px;}
   .arc-stage{
     position:relative;
     width:100%;
@@ -700,6 +701,7 @@
       <div class="mostrador-meta" id="mostradorMeta"></div>
       <div class="sector-tabs" id="sectorTabs"></div>
       <div class="mostrador-sub" id="mostradorSub">0 / 0 puestos asignados</div>
+      <button class="btn small" id="btnExportarExcel">📊 Exportar listado a Excel</button>
       <div class="arc-stage" id="arcStage">
         <div class="counter-shape"></div>
       </div>
@@ -1370,6 +1372,35 @@
     assignVendorToPlace(available[idx].id, sucId, sectorId, placeIndex);
   }
 
+  // ---------- Exportar listado a Excel ----------
+  function exportarSectorExcel(){
+    var suc = getSucursal(selectedSucursalId);
+    var sector = getSelectedSector(suc);
+    if(!sector || sector.lugares === 0){
+      showToast('Este sector no tiene puestos configurados.');
+      return;
+    }
+    var filas = [];
+    for(var i=0;i<sector.lugares;i++){
+      var vendorId = sector.asignaciones[i];
+      var v = vendorId !== undefined ? getVendedor(vendorId) : null;
+      filas.push({
+        'Puesto': i+1,
+        'Nombre': v ? v.nombre : '',
+        'Cargo': v ? (v.cargo || '') : '',
+        'Teléfono': v ? (v.telefono || '') : '',
+        'Mail': v ? (v.mail || '') : '',
+        'Estado': v ? (v.estado || '') : ''
+      });
+    }
+    var ws = XLSX.utils.json_to_sheet(filas);
+    var wb = XLSX.utils.book_new();
+    var nombreHoja = (sector.nombre || 'Sector').substring(0,31).replace(/[\\/?*\[\]:]/g, ' ');
+    XLSX.utils.book_append_sheet(wb, ws, nombreHoja);
+    var nombreArchivo = (suc.nombre + '_' + sector.nombre).replace(/[\\/?*\[\]:]/g, '_') + '.xlsx';
+    XLSX.writeFile(wb, nombreArchivo);
+  }
+
   // ---------- Hover vendor card ----------
   function whatsappHref(vendor){
     var digits = (vendor.telefono || '').replace(/\D/g, '');
@@ -1945,6 +1976,8 @@
       }
     });
   });
+
+  document.getElementById('btnExportarExcel').addEventListener('click', exportarSectorExcel);
 
   setInterval(function(){
     if(!state) return;
